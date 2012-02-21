@@ -50,6 +50,45 @@ function jsk_drush_command() {
     'drupal_dependencies' => array('pathauto'),
   );
 
+  $items['jsk-node-delete'] = array(
+    'callback' => 'my_drush_node_delete',
+    'description' => 'Performs a bulk delete operation on nodes.',
+    'aliases' => array('ndel'),
+    'examples' => array(
+      'drush --user=1 node-delete blog' =>  'Deletes all nodes of type blog.',
+    ),
+    'arguments' => array(
+      'type' => 'Type of node to delete. Using all will delete all nodes.',
+    ),
+    'bootstrap' => DRUSH_BOOTSTRAP_MAX,
+  );
+
+  $items['jsk-term-delete'] = array(
+    'callback' => 'my_drush_term_delete',
+    'description' => 'Performs a bulk delete operation on terms.',
+    'aliases' => array('tdel'),
+    'examples' => array(
+      'drush --user=1 term-delete 1' =>  'Deletes all terms in vocabulary 1.',
+    ),
+    'arguments' => array(
+      'type' => 'Vocabulary ID of terms to delete. Using all will delete all terms.',
+    ),
+    'bootstrap' => DRUSH_BOOTSTRAP_MAX,
+  );
+
+  $items['jsk-smartqueue-fill'] = array(
+    'callback' => 'jsk_drush_smartqueue_fill',
+    'description' => 'Creates all taxonomy smartqueues by loading a node associated with each type',
+    'aliases' => array('jsk-sf'),
+    'examples' => array(
+      'drush jsk-sf 1' =>  'Deletes loads a node associated with every term in vocabulary 1.',
+    ),
+    'arguments' => array(
+      'type' => 'Vocabulary ID of terms to use',
+    ),
+    'bootstrap' => DRUSH_BOOTSTRAP_MAX,
+  );
+
   return $items;
 }
 
@@ -129,4 +168,73 @@ function drush_jsk_path_generate($type = 'node') {
     drush_print('Can\'t find that function:'. $function);
   }
 
+}
+
+function my_drush_term_delete($vid = '') { 
+  if(empty($vid)) {
+    return drush_set_error('Vocabulary ID argument required.');
+  }
+
+  else { 
+    $rsc = drush_db_select('term_data', 'tid', 'vid = :vid', array(':vid' => $vid));
+  }
+
+  $proceed = drush_confirm('You are about to delete a bunch of terms. Proceed?');
+  if($proceed) {
+    while ($tid = drush_db_result($rsc)) { 
+      $result = taxonomy_del_term($tid);
+      drush_log("Deleted term '$tid'", $result == SAVED_DELETED ? 'success' : 'failed' );
+    }
+  }
+  else {
+    drush_print("Term deletion cancelled.");
+  }
+}
+
+function my_drush_node_delete($node_type = '') {
+  if(empty($node_type)) {
+    return drush_set_error('Node type argument required.');
+  }
+
+  if($node_type == 'all') {
+    $rsc = drush_db_select('node', 'nid');
+  }
+  else {
+    $rsc = drush_db_select('node', 'nid', 'type = :type', array(':type' => $node_type));
+  }
+
+  $nodes = array();
+  while ($nid = drush_db_fetch_object($rsc)) {
+    $nodes[] = $nid;
+  }
+
+  if (empty($nodes)) {
+    return drush_set_error(dt('No nodes found.'));
+  }
+
+  $proceed = drush_confirm('You are about to delete ' . count($nodes) . ' nodes. Proceed?');
+  if($proceed) {
+    foreach($nodes as $node) {
+      node_delete($node->nid);
+    }
+    $output = 'Successfully deleted ' . count($nodes) . ' nodes of type ' . $node_type;
+    drush_log($output, 'success');
+  }
+  else {
+    drush_print("Node deletion cancelled.");
+  }
+}
+
+function jsk_drush_smartqueue_fill($vid) { 
+  drush_print($vid);
+  $vocabulary = taxonomy_vocabulary_load($vid);
+
+  if ($vocabulary) { 
+    $queue = nodequeue_load(1);
+    $query = db_query('SELECT * FROM nodequeue_subqueue s RIGHT JOIN term_data td ON td.tid = s.reference WHERE s.reference IS NULL AND td.vid = %d', $vocabulary->vid);
+    while($row = db_fetch_object($query)) { 
+      $reference = $row->tid;
+      nodequeue_add_subqueue($queue, smartqueue_taxonomy_nodequeue_subqueue_title($queue, $reference), $reference);
+    }
+  }
 }

@@ -191,7 +191,7 @@ $options['skip-tables'] = array(
 
 // Specify additional directories to search for scripts
 // Separate by : (Unix-based systems) or ; (Windows).
-# $command_specific['script']['script-path'] = 'sites/all/scripts:profiles/myprofile/scripts';
+$command_specific['script']['script-path'] = 'sites/all/scripts';
 
 // Always show release notes when running pm-update or pm-updatecode
 # $command_specific['pm-update'] = array('notes' => TRUE);
