@@ -89,6 +89,19 @@ function jsk_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_MAX,
   );
 
+  $items['jsk-apachesolr-reindex-node'] = array(
+    'callback' => 'jsk_drush_apachesolr_reindex_node',
+    'description' => 'Reindexes a single node. Used for testing custom apachesolr results',
+    'aliases' => array('jsk-rin'),
+    'examples' => array(
+      'drush jsk-as-m 183' =>  'Reindexes a node 183.',
+    ),
+    'arguments' => array(
+      'nid' => 'ID of node to reindex',
+    ),
+    'bootstrap' => DRUSH_BOOTSTRAP_MAX,
+  );
+
   return $items;
 }
 
@@ -237,4 +250,43 @@ function jsk_drush_smartqueue_fill($vid) {
       nodequeue_add_subqueue($queue, smartqueue_taxonomy_nodequeue_subqueue_title($queue, $reference), $reference);
     }
   }
+}
+
+/** 
+ * Function to (re)index one node
+ */
+function jsk_drush_apachesolr_reindex_node($nid = 0) { 
+
+  // Make sure we have an nid
+  if (!$nid) { 
+    drush_log("Please supply a valid NID", 'error');
+    return 1;
+  }
+
+  // Validate nid
+  $node = node_load($nid);
+  if (!$node) { 
+    drush_log("Node $nid not found!", 'error');
+    return 2;
+  }
+
+  // Insert or update row in apachesolr index table
+  $row = db_result(db_query('SELECT 1 FROM {apachesolr_search_node} WHERE nid = %d', $node->nid));
+  if (!$row) { 
+    db_query('INSERT INTO {apachesolr_search_node} (nid, status, changed) VALUES (%d, %d, %d)', $node->nid, $node->status, time());
+  }
+  else { 
+    apachesolr_mark_node($node->nid);
+  }
+
+  // Grab the row and feed it into the build function
+  $row = db_fetch_object(db_query('SELECT nid, changed FROM {apachesolr_search_node} WHERE nid = %d', $node->nid));
+  $success = apachesolr_index_nodes(array($row), 'apachesolr_search');
+
+  if (!$success) { 
+    drush_log('An error occured :(', 'error');
+    return 4;
+  }
+
+  drush_log('Node \''. $node->title .'\' ('. $node->nid .') has been indexed.', 'ok');
 }
