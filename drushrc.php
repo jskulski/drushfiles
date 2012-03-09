@@ -73,7 +73,7 @@
 # $options['default-major'] = 6;
 
 // Specify CVS for checkouts
-# $options['package-handler'] = 'cvs';
+$options['package-handler'] = 'git_drupalorg';
 
 // Specify CVS credentials for checkouts (requires --package-handler=cvs)
 # $options['cvscredentials'] = 'name:password';
